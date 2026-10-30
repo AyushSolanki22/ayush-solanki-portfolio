@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#08080c" />
+    <title>Admin — Ayush Solanki</title>
+  </head>
+  <body class="admin-body">
+    <main class="admin-shell">
+      <header class="admin-header">
+        <a class="admin-brand" href="/">AS<span>.</span></a>
+        <span class="admin-label">PORTFOLIO CONTROL ROOM</span>
+        <button
+          id="logout-button"
+          class="secondary-button"
+          type="button"
+          hidden
+        >
+          Log out
+        </button>
+      </header>
+
+      <section id="login-view" class="admin-card">
+        <p class="admin-kicker">AUTHORIZED ACCESS ONLY</p>
+        <h1>Admin sign in</h1>
+        <form id="login-form">
+          <label
+            >Email<input
+              name="email"
+              type="email"
+              required
+              autocomplete="username"
+          /></label>
+          <label
+            >Password<input
+              name="password"
+              type="password"
+              required
+              autocomplete="current-password"
+          /></label>
+          <button type="submit">Sign in ↗</button>
+          <p id="login-error" class="admin-error" role="status"></p>
+        </form>
+      </section>
+
+      <section id="dashboard" hidden>
+        <nav class="admin-nav" aria-label="Admin sections">
+          <button type="button" class="active" data-view="home">Home</button>
+          <button type="button" data-view="messages">Messages</button>
+          <button type="button" data-view="projects">Projects</button>
+          <button type="button" data-view="certificates">Certificates</button>
+          <button type="button" data-view="profile">Profile & skills</button>
+        </nav>
+
+        <section id="view-home" class="admin-view">
+          <p class="admin-kicker">YOUR PORTFOLIO AT A GLANCE</p>
+          <h1>Welcome back</h1>
+          <div class="stats-grid">
+            <article>
+              <span>Inbox</span><strong id="stat-messages">—</strong>
+            </article>
+            <article>
+              <span>Unread</span><strong id="stat-unread">—</strong>
+            </article>
+            <article>
+              <span>Projects</span><strong id="stat-projects">—</strong>
+            </article>
+            <article>
+              <span>Published</span><strong id="stat-published">—</strong>
+            </article>
+            <article>
+              <span>Certificates</span>
+              <strong id="stat-certificates">—</strong>
+            </article>
+          </div>
+          <p id="home-status" class="inbox-status" role="status"></p>
+        </section>
+
+        <section id="view-messages" class="admin-view" hidden>
+          <div class="inbox-heading">
+            <div>
+              <p class="admin-kicker">CONTACT FORM</p>
+              <h1>Messages</h1>
+            </div>
+            <div class="inbox-actions">
+              <input
+                id="message-search"
+                type="search"
+                placeholder="Search messages"
+              />
+              <select id="message-filter" aria-label="Filter messages">
+                <option value="inbox">Inbox</option>
+                <option value="unread">Unread</option>
+                <option value="archived">Archived</option>
+              </select>
+              <button
+                id="refresh-button"
+                class="secondary-button"
+                type="button"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+          <p id="inbox-status" class="inbox-status" role="status"></p>
+          <div class="inbox-grid">
+            <div id="message-list" class="message-list"></div>
+            <article id="message-detail" class="message-detail">
+              <p class="empty-state">Select a message to read it.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-projects" class="admin-view" hidden>
+          <div class="inbox-heading">
+            <div>
+              <p class="admin-kicker">PORTFOLIO CONTENT</p>
+              <h1>Projects</h1>
+            </div>
+            <button id="new-project" class="primary-button" type="button">
+              Add project +
+            </button>
+          </div>
+          <form id="project-form" class="editor-card" hidden>
+            <input name="id" type="hidden" />
+            <label
+              >Project name<input name="title" required maxlength="100"
+            /></label>
+            <label
+              >Short description<textarea
+                name="summary"
+                required
+                maxlength="280"
+              ></textarea>
+            </label>
+            <label
+              >Details<textarea name="description" rows="4"></textarea>
+            </label>
+            <label
+              >Technologies <small>Separate with commas</small
+              ><input name="stack"
+            /></label>
+            <label>GitHub URL<input name="githubUrl" type="url" /></label>
+            <label>Live URL<input name="liveUrl" type="url" /></label>
+            <label class="checkbox-label"
+              ><input name="featured" type="checkbox" /> Featured project</label
+            >
+            <label
+              >Status
+              <select name="status">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+              </select>
+            </label>
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Save project</button>
+              <button
+                id="cancel-project"
+                class="secondary-button"
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+          <p id="project-status" class="inbox-status" role="status"></p>
+          <div id="project-list" class="project-list"></div>
+        </section>
+        <section id="view-certificates" class="admin-view" hidden>
+          <div class="inbox-heading">
+            <div>
+              <p class="admin-kicker">PORTFOLIO CONTENT</p>
+              <h1>Certificates</h1>
+            </div>
+            <button id="new-certificate" class="primary-button" type="button">
+              Add certificate +
+            </button>
+          </div>
+
+          <form id="certificate-form" class="editor-card" hidden>
+            <input name="id" type="hidden" />
+
+            <label>
+              Certificate title
+              <input name="title" required maxlength="120" />
+            </label>
+
+            <label>
+              Issuing organization
+              <input name="issuer" required maxlength="120" />
+            </label>
+
+            <label>
+              Year or date
+              <input name="year" required maxlength="40" placeholder="2025" />
+            </label>
+
+            <label>
+              Certificate image path or HTTPS URL
+              <input
+                name="imageUrl"
+                required
+                maxlength="500"
+                placeholder="/images/certificates/my-certificate.jpg"
+              />
+            </label>
+
+            <label>
+              Credential link <small>Optional</small>
+              <input
+                name="credentialUrl"
+                maxlength="500"
+                placeholder="https://…"
+              />
+            </label>
+
+            <label>
+              Display order <small>Lower numbers appear first</small>
+              <input name="order" type="number" min="0" step="1" value="0" />
+            </label>
+
+            <label>
+              Status
+              <select name="status">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+              </select>
+            </label>
+
+            <div class="form-actions">
+              <button class="primary-button" type="submit">
+                Save certificate
+              </button>
+              <button
+                id="cancel-certificate"
+                class="secondary-button"
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+
+          <p id="certificate-status" class="inbox-status" role="status"></p>
+          <div id="certificate-list" class="project-list"></div>
+        </section>
+        <section id="view-profile" class="admin-view" hidden>
+          <p class="admin-kicker">EDIT YOUR PORTFOLIO CONTENT</p>
+          <h1>Profile & skills</h1>
+          <form id="profile-form" class="editor-card">
+            <label>Hero line<input name="heroLine" maxlength="160" /></label>
+            <label
+              >About text<textarea
+                name="about"
+                rows="5"
+                maxlength="2000"
+              ></textarea>
+            </label>
+            <label
+              >Availability<input name="availability" maxlength="120"
+            /></label>
+            <label
+              >Skills <small>One per line</small
+              ><textarea name="skills" rows="5"></textarea>
+            </label>
+            <label
+              >Education <small>One entry per line</small
+              ><textarea name="education" rows="4"></textarea>
+            </label>
+            <label
+              >Experience <small>One entry per line</small
+              ><textarea name="experience" rows="4"></textarea>
+            </label>
+            <label>Photo URL<input name="photoUrl" type="url" /></label>
+            <label
+              >Resume URL<input name="resumeUrl" placeholder="/resume.pdf"
+            /></label>
+            <label>GitHub URL<input name="github" type="url" /></label>
+            <label>LinkedIn URL<input name="linkedin" type="url" /></label>
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Save profile</button>
+              <span
+                id="profile-status"
+                class="inbox-status"
+                role="status"
+              ></span>
+            </div>
+          </form>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="/src/admin.js"></script>
+  </body>
+</html>
