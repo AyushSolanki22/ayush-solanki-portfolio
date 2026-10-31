@@ -1,4 +1,4 @@
-import * as THREE from "three";
+const stage = document.querySelector("#orb-stage");
 
 const reduceMotion = window.matchMedia(
   "(prefers-reduced-motion: reduce)",
@@ -64,103 +64,36 @@ if ("IntersectionObserver" in window && !reduceMotion) {
   revealItems.forEach((item) => item.classList.add("visible"));
 }
 
-const stage = document.querySelector("#orb-stage");
-const isSmall = window.matchMedia("(max-width: 600px)").matches;
-const canRender3d =
-  !reduceMotion && !isSmall && stage && "WebGLRenderingContext" in window;
+if (stage) {
+  stage.querySelector("canvas")?.remove();
+  stage.querySelector(".reactor-motion")?.remove();
 
-if (canRender3d) {
-  try {
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
-    camera.position.z = 5.2;
+  const motion = document.createElement("div");
+  motion.className = "reactor-motion";
+  motion.setAttribute("aria-hidden", "true");
 
-    const renderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true,
-      powerPreference: "low-power",
-    });
+  const reactorImage = document.createElement("img");
+  reactorImage.className = "reactor-image";
+  reactorImage.src = "/images/reactor-core.png";
+  reactorImage.alt = "";
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
-    renderer.setSize(stage.clientWidth, stage.clientHeight);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.setClearColor(0x000000, 0);
-    stage.replaceChildren(renderer.domElement);
+  reactorImage.addEventListener("error", () => {
+    console.error("Could not load /images/reactor-core.png");
+  });
 
-    const orb = new THREE.Group();
-    scene.add(orb);
+  motion.append(reactorImage);
+  stage.append(motion);
 
-    const geometry = new THREE.IcosahedronGeometry(1.12, 5);
-    const material = new THREE.MeshPhysicalMaterial({
-      color: 0x8c63d8,
-      metalness: 0.52,
-      roughness: 0.2,
-      clearcoat: 1,
-      clearcoatRoughness: 0.13,
-      emissive: 0x251044,
-      emissiveIntensity: 0.55,
-    });
-
-    orb.add(new THREE.Mesh(geometry, material));
-
-    const wire = new THREE.Mesh(
-      geometry,
-      new THREE.MeshBasicMaterial({
-        color: 0xd6c0ff,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.12,
-      }),
-    );
-    wire.scale.setScalar(1.004);
-    orb.add(wire);
-
-    const ringA = new THREE.Mesh(
-      new THREE.TorusGeometry(1.48, 0.004, 8, 180),
-      new THREE.MeshBasicMaterial({
-        color: 0xc3a6ff,
-        transparent: true,
-        opacity: 0.68,
-        side: THREE.DoubleSide,
-      }),
-    );
-    ringA.rotation.set(1.16, 0.24, -0.42);
-    orb.add(ringA);
-
-    const ringB = new THREE.Mesh(
-      new THREE.TorusGeometry(1.62, 0.003, 8, 180),
-      new THREE.MeshBasicMaterial({
-        color: 0x73e6de,
-        transparent: true,
-        opacity: 0.42,
-        side: THREE.DoubleSide,
-      }),
-    );
-    ringB.rotation.set(1.02, -0.42, 0.56);
-    orb.add(ringB);
-
-    scene.add(new THREE.AmbientLight(0x897ca8, 1.25));
-
-    const key = new THREE.PointLight(0xf4eaff, 45, 12);
-    key.position.set(-2.4, 2.4, 3.8);
-    scene.add(key);
-
-    const cyan = new THREE.PointLight(0x63d8e3, 28, 9);
-    cyan.position.set(2.6, -1, 2.2);
-    scene.add(cyan);
-
-    const violet = new THREE.PointLight(0x8b57ee, 28, 10);
-    violet.position.set(0, 2.4, -2.5);
-    scene.add(violet);
-
-    const pointer = { x: 0, y: 0 };
-
+  if (!reduceMotion && window.matchMedia("(hover: hover)").matches) {
     stage.addEventListener(
       "pointermove",
       (event) => {
-        const rect = stage.getBoundingClientRect();
-        pointer.x = ((event.clientX - rect.left) / rect.width - 0.5) * 2;
-        pointer.y = ((event.clientY - rect.top) / rect.height - 0.5) * 2;
+        const bounds = stage.getBoundingClientRect();
+        const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+        const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+
+        motion.style.setProperty("--tilt-x", `${-y * 7}deg`);
+        motion.style.setProperty("--tilt-y", `${x * 9}deg`);
       },
       { passive: true },
     );
@@ -168,57 +101,10 @@ if (canRender3d) {
     stage.addEventListener(
       "pointerleave",
       () => {
-        pointer.x = 0;
-        pointer.y = 0;
+        motion.style.setProperty("--tilt-x", "0deg");
+        motion.style.setProperty("--tilt-y", "0deg");
       },
       { passive: true },
-    );
-
-    const resize = () => {
-      const width = stage.clientWidth;
-      const height = stage.clientHeight;
-      if (!width || !height) return;
-
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-      renderer.setSize(width, height, false);
-    };
-
-    if ("ResizeObserver" in window) {
-      new ResizeObserver(resize).observe(stage);
-    } else {
-      window.addEventListener("resize", resize);
-    }
-
-    let frame;
-
-    const render = (time) => {
-      frame = requestAnimationFrame(render);
-
-      const t = time * 0.00022;
-      orb.rotation.y += (pointer.x * 0.18 + t * 0.35 - orb.rotation.y) * 0.018;
-      orb.rotation.x +=
-        (-pointer.y * 0.13 + Math.sin(t) * 0.1 - orb.rotation.x) * 0.018;
-      ringA.rotation.z += 0.0008;
-      ringB.rotation.z -= 0.0006;
-      orb.position.y = Math.sin(t * 1.7) * 0.035;
-
-      renderer.render(scene, camera);
-    };
-
-    render(0);
-
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        cancelAnimationFrame(frame);
-      } else {
-        render(0);
-      }
-    });
-  } catch (error) {
-    console.info(
-      "Keeping the CSS orb fallback because WebGL could not start.",
-      error,
     );
   }
 }
@@ -521,3 +407,257 @@ document
   ?.addEventListener("click", () => scrollCertificates(1));
 
 loadPortfolioCertificates();
+
+
+
+const projectGrid = document.querySelector('#project-grid');
+
+function safeProjectUrl(value) {
+  if (!value) return '';
+
+  try {
+    const url = new URL(value, window.location.origin);
+    if (url.protocol === 'https:' || url.protocol === 'http:') {
+      return url.href;
+    }
+  } catch {
+    // Invalid URL: do not render a link.
+  }
+
+  return '';
+}
+
+function createProjectCard(project) {
+  const card = document.createElement('article');
+  card.className = 'project-card';
+
+  if (project.featured) {
+    card.classList.add('is-featured');
+  }
+
+  const imageUrl = safeProjectUrl(project.imageUrl);
+  const githubUrl = safeProjectUrl(project.githubUrl);
+  const liveUrl = safeProjectUrl(project.liveUrl);
+
+  const media = document.createElement('div');
+  media.className = 'project-card-media';
+
+  if (imageUrl) {
+    const image = document.createElement('img');
+    image.src = imageUrl;
+    image.alt = `${project.title} project preview`;
+    image.loading = 'lazy';
+    media.append(image);
+  } else {
+    media.classList.add('project-card-media-fallback');
+    const initials = document.createElement('span');
+    initials.textContent = project.title
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((word) => word[0] || '')
+      .join('')
+      .toUpperCase();
+    media.append(initials);
+  }
+
+  const badges = document.createElement('div');
+  badges.className = 'project-card-badges';
+
+  if (liveUrl) {
+    badges.append(makeProjectBadge('LIVE', 'live'));
+  }
+
+  if (project.accessType === 'private') {
+    badges.append(makeProjectBadge('PRIVATE', 'private'));
+  }
+
+  if (project.featured) {
+    badges.append(makeProjectBadge('FEATURED', 'featured'));
+  }
+
+  media.append(badges);
+
+  const body = document.createElement('div');
+  body.className = 'project-card-body';
+
+  const heading = document.createElement('div');
+  heading.className = 'project-card-heading';
+
+  const mark = document.createElement('span');
+  mark.className = 'project-card-mark';
+  mark.setAttribute('aria-hidden', 'true');
+  mark.textContent = '✳';
+
+  const titleGroup = document.createElement('div');
+
+  const title = document.createElement('h3');
+title.textContent = project.title;
+
+if (project.category?.trim()) {
+  const category = document.createElement('p');
+  category.className = 'project-card-category';
+  category.textContent = project.category;
+  titleGroup.append(category);
+}
+
+titleGroup.append(title);
+  heading.append(mark, titleGroup);
+
+  const summary = document.createElement('p');
+  summary.className = 'project-card-summary';
+  summary.textContent = project.summary;
+
+  body.append(heading, summary);
+
+  if (Array.isArray(project.stack) && project.stack.length) {
+    const tags = document.createElement('ul');
+    tags.className = 'project-card-tags';
+    tags.setAttribute('aria-label', 'Technologies used');
+
+    project.stack.forEach((item) => {
+      const tag = document.createElement('li');
+      tag.textContent = item;
+      tags.append(tag);
+    });
+
+    body.append(tags);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'project-card-actions';
+
+  if (githubUrl) {
+    actions.append(makeProjectLink('GitHub', githubUrl, 'github'));
+  }
+
+  if (liveUrl) {
+    actions.append(makeProjectLink('Live project', liveUrl, 'live'));
+  }
+
+  if (project.accessType === 'private' && !githubUrl && !liveUrl) {
+    const privateNote = document.createElement('span');
+    privateNote.className = 'project-private-note';
+    privateNote.textContent = 'Private / internal project';
+    actions.append(privateNote);
+  }
+
+  if (actions.children.length) {
+    body.append(actions);
+  }
+
+  card.append(media, body);
+  return card;
+}
+
+function makeProjectBadge(label, kind) {
+  const badge = document.createElement('span');
+  badge.className = `project-badge project-badge-${kind}`;
+  badge.textContent = label;
+  return badge;
+}
+
+function makeProjectLink(label, url, kind) {
+  const link = document.createElement('a');
+  link.className = `project-link project-link-${kind}`;
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = label;
+  return link;
+}
+
+async function loadPortfolioProjects() {
+  if (!projectGrid) return;
+
+  try {
+    const response = await fetch('/api/portfolio/projects');
+
+    if (!response.ok) {
+      throw new Error('Could not load projects.');
+    }
+
+    const { projects = [] } = await response.json();
+    projectGrid.replaceChildren();
+
+    if (!projects.length) {
+      const empty = document.createElement('p');
+      empty.className = 'projects-empty';
+      empty.textContent = 'Projects will appear here soon.';
+      projectGrid.append(empty);
+      return;
+    }
+
+    projectGrid.append(...projects.map(createProjectCard));
+  } catch (error) {
+    const message = document.createElement('p');
+    message.className = 'projects-empty';
+    message.textContent = error.message;
+    projectGrid.replaceChildren(message);
+  }
+}
+
+loadPortfolioProjects();
+
+
+async function loadPortfolioSkills() {
+  const track = document.querySelector('#portfolio-skills-track');
+  if (!track) return;
+
+  try {
+    const response = await fetch('/api/portfolio/content');
+    if (!response.ok) throw new Error('Could not load skills.');
+
+    const { content } = await response.json();
+    const skills = Array.isArray(content?.skills)
+      ? content.skills.filter((skill) => typeof skill === 'string' && skill.trim())
+      : [];
+
+    track.replaceChildren();
+
+    if (!skills.length) {
+      const message = document.createElement('p');
+      message.className = 'skills-empty';
+      message.textContent = 'Skills will appear here soon.';
+      track.append(message);
+      return;
+    }
+
+    function makeSkillGroup(hidden = false) {
+      const group = document.createElement('div');
+      group.className = 'skill-object-group';
+
+      if (hidden) group.setAttribute('aria-hidden', 'true');
+
+      skills.forEach((skill) => {
+        const item = document.createElement('span');
+        item.className = 'skill-object';
+
+        const abbreviation = document.createElement('b');
+        abbreviation.textContent = skill
+          .split(/\s+/)
+          .map((word) => word[0])
+          .join('')
+          .slice(0, 3)
+          .toUpperCase();
+
+        const label = document.createElement('small');
+        label.textContent = skill;
+
+        item.append(abbreviation, label);
+        group.append(item);
+      });
+
+      return group;
+    }
+
+    track.append(makeSkillGroup(), makeSkillGroup(true));
+  } catch {
+    track.replaceChildren();
+    const message = document.createElement('p');
+    message.className = 'skills-empty';
+    message.textContent = 'Skills could not be loaded.';
+    track.append(message);
+  }
+}
+
+loadPortfolioSkills();

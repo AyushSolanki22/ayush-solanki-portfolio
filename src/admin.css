@@ -531,3 +531,40 @@
     flex-direction: column;
   }
 }
+
+
+.admin-skill-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-skill-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-skill-row input {
+  flex: 1;
+}
+
+.field-hint {
+  margin: 0;
+  color: #888490;
+  font-size: 12px;
+}
+
+.admin-image-preview {
+  display: block;
+  width: min(100%, 360px);
+  max-height: 220px;
+  margin-top: 12px;
+  border: 1px solid #302d38;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.admin-image-preview[hidden] {
+  display: none;
+}

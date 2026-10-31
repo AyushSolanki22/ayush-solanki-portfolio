@@ -1,34 +1,68 @@
-import 'dotenv/config';
-import express from 'express';
-import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import helmet from 'helmet';
-import { rateLimit } from 'express-rate-limit';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import "dotenv/config";
+import { v2 as cloudinary } from "cloudinary";
+import multer from "multer";
+import { Readable } from "node:stream";
+import express from "express";
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
-const production = process.env.NODE_ENV === 'production';
+const production = process.env.NODE_ENV === "production";
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
-for (const key of ['MONGODB_URI', 'ADMIN_EMAIL', 'ADMIN_PASSWORD', 'JWT_SECRET']) {
+for (const key of [
+  "MONGODB_URI",
+  "ADMIN_EMAIL",
+  "ADMIN_PASSWORD",
+  "JWT_SECRET",
+]) {
   if (!process.env[key]) throw new Error(`Missing ${key} in .env`);
 }
 
 if (process.env.JWT_SECRET.length < 32) {
-  throw new Error('JWT_SECRET must be at least 32 characters.');
+  throw new Error("JWT_SECRET must be at least 32 characters.");
 }
 
-app.disable('x-powered-by');
-app.use(express.json({ limit: '30kb' }));
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter(_req, file, done) {
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.mimetype)) {
+      return done(new Error("Choose a JPG, PNG, or WebP image."));
+    }
+
+    done(null, true);
+  },
+});
+
+app.disable("x-powered-by");
+app.use(express.json({ limit: "30kb" }));
 app.use(helmet());
 
 const messageSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 100 },
-    email: { type: String, required: true, trim: true, lowercase: true, maxlength: 254 },
+    email: {
+      type: String,
+      required: true,
+      trim: true,
+      lowercase: true,
+      maxlength: 254,
+    },
     subject: { type: String, required: true, trim: true, maxlength: 160 },
     message: { type: String, required: true, trim: true, maxlength: 5000 },
     read: { type: Boolean, default: false },
@@ -40,13 +74,29 @@ const messageSchema = new mongoose.Schema(
 const projectSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true, maxlength: 100 },
+    category: {
+      type: String,
+      default: "Full-stack development",
+      trim: true,
+      maxlength: 80,
+    },
     summary: { type: String, required: true, trim: true, maxlength: 280 },
-    description: { type: String, default: '', trim: true, maxlength: 3000 },
+    description: { type: String, default: "", trim: true, maxlength: 3000 },
+    imageUrl: { type: String, default: "", trim: true, maxlength: 500 },
     stack: [{ type: String, trim: true, maxlength: 40 }],
-    githubUrl: { type: String, default: '', trim: true },
-    liveUrl: { type: String, default: '', trim: true },
+    githubUrl: { type: String, default: "", trim: true, maxlength: 500 },
+    liveUrl: { type: String, default: "", trim: true, maxlength: 500 },
+    accessType: {
+      type: String,
+      enum: ["public", "private"],
+      default: "public",
+    },
     featured: { type: Boolean, default: false },
-    status: { type: String, enum: ['draft', 'published'], default: 'draft' },
+    status: {
+      type: String,
+      enum: ["draft", "published"],
+      default: "draft",
+    },
   },
   { timestamps: true },
 );
@@ -56,12 +106,18 @@ const certificateSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true, maxlength: 120 },
     issuer: { type: String, required: true, trim: true, maxlength: 120 },
     year: { type: String, required: true, trim: true, maxlength: 40 },
-    imageUrl: { type: String, required: true, trim: true, maxlength: 500 },
-    credentialUrl: { type: String, default: '', trim: true, maxlength: 500 },
+    imageUrl: {
+      type: String,
+      default: "",
+      required: true,
+      trim: true,
+      maxlength: 500,
+    },
+    credentialUrl: { type: String, default: "", trim: true, maxlength: 500 },
     status: {
       type: String,
-      enum: ['draft', 'published'],
-      default: 'draft',
+      enum: ["draft", "published"],
+      default: "draft",
     },
     order: { type: Number, default: 0, min: 0 },
   },
@@ -70,46 +126,43 @@ const certificateSchema = new mongoose.Schema(
 
 const portfolioContentSchema = new mongoose.Schema(
   {
-    key: { type: String, required: true, unique: true, default: 'main' },
-    heroLine: { type: String, default: '', trim: true, maxlength: 160 },
-    about: { type: String, default: '', trim: true, maxlength: 2000 },
-    availability: { type: String, default: '', trim: true, maxlength: 120 },
-    photoUrl: { type: String, default: '', trim: true, maxlength: 500 },
-    resumeUrl: { type: String, default: '', trim: true, maxlength: 500 },
-    github: { type: String, default: '', trim: true, maxlength: 500 },
-    linkedin: { type: String, default: '', trim: true, maxlength: 500 },
-    skills: [{ type: String, trim: true, maxlength: 100 }],
+    key: { type: String, required: true, unique: true, default: "main" },
+    heroLine: { type: String, default: "", trim: true, maxlength: 160 },
+    about: { type: String, default: "", trim: true, maxlength: 2000 },
+    availability: { type: String, default: "", trim: true, maxlength: 120 },
+    photoUrl: { type: String, default: "", trim: true, maxlength: 500 },
+    resumeUrl: { type: String, default: "", trim: true, maxlength: 500 },
+    github: { type: String, default: "", trim: true, maxlength: 500 },
+    linkedin: { type: String, default: "", trim: true, maxlength: 500 },
+    skills: [{ type: String, trim: true, maxlength: 100, default: [] }],
     education: [{ type: String, trim: true, maxlength: 300 }],
     experience: [{ type: String, trim: true, maxlength: 300 }],
   },
   { timestamps: true },
 );
 
-
-
-const Message = mongoose.model('Message', messageSchema);
-const Project = mongoose.model('Project', projectSchema);
-const Certificate = mongoose.model('Certificate', certificateSchema);
+const Message = mongoose.model("Message", messageSchema);
+const Project = mongoose.model("Project", projectSchema);
+const Certificate = mongoose.model("Certificate", certificateSchema);
 const PortfolioContent = mongoose.model(
-  'PortfolioContent',
+  "PortfolioContent",
   portfolioContentSchema,
 );
-
 
 const adminPasswordHash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
 const cookieOptions = {
   httpOnly: true,
   secure: production,
-  sameSite: 'strict',
-  path: '/api/admin',
+  sameSite: "strict",
+  path: "/api/admin",
 };
 
 app.use((req, _res, next) => {
-  const token = (req.headers.cookie || '')
-    .split(';')
+  const token = (req.headers.cookie || "")
+    .split(";")
     .map((part) => part.trim())
-    .find((part) => part.startsWith('adminToken='))
-    ?.slice('adminToken='.length);
+    .find((part) => part.startsWith("adminToken="))
+    ?.slice("adminToken=".length);
 
   req.adminToken = token ? decodeURIComponent(token) : null;
   next();
@@ -117,87 +170,161 @@ app.use((req, _res, next) => {
 
 function requireAdmin(req, res, next) {
   try {
-    if (!req.adminToken) throw new Error('Missing token');
+    if (!req.adminToken) throw new Error("Missing token");
     req.admin = jwt.verify(req.adminToken, process.env.JWT_SECRET);
     next();
   } catch {
-    res.status(401).json({ error: 'Please sign in again.' });
+    res.status(401).json({ error: "Please sign in again." });
   }
 }
+
+app.post(
+  "/api/admin/upload-image",
+  requireAdmin,
+  (req, res, next) => {
+    imageUpload.single("image")(req, res, (error) => {
+      if (error) {
+        return res.status(400).json({
+          error: error.message || "Could not process the image.",
+        });
+      }
+
+      next();
+    });
+  },
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: "Choose an image to upload." });
+    }
+
+    try {
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: "ayush-portfolio",
+            resource_type: "image",
+          },
+          (error, uploadedImage) => {
+            if (error) reject(error);
+            else resolve(uploadedImage);
+          },
+        );
+
+        Readable.from([req.file.buffer]).pipe(stream);
+      });
+
+      res.json({
+        url: result.secure_url,
+        publicId: result.public_id,
+      });
+    } catch (error) {
+      console.error("Cloudinary upload error:", error);
+console.error("Error properties:", Object.getOwnPropertyNames(error));
+console.error("Cloudinary response:", error.response);
+console.error(
+  "X-Cld-Error:",
+  error.response?.headers?.["x-cld-error"],
+);
+      res.status(500).json({ error: "Image upload failed. Please try again." });
+    }
+  },
+);
 
 const contactLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5 });
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10 });
 
-app.post('/api/contact', contactLimiter, async (req, res) => {
+app.post("/api/contact", contactLimiter, async (req, res) => {
   try {
     const { name, email, subject, message } = req.body ?? {};
-    if (![name, email, subject, message].every(
-      (value) => typeof value === 'string' && value.trim(),
-    )) {
-      return res.status(400).json({ error: 'Please complete every field.' });
+    if (
+      ![name, email, subject, message].every(
+        (value) => typeof value === "string" && value.trim(),
+      )
+    ) {
+      return res.status(400).json({ error: "Please complete every field." });
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      return res.status(400).json({ error: 'Please enter a valid email.' });
+      return res.status(400).json({ error: "Please enter a valid email." });
     }
 
     await Message.create({ name, email, subject, message });
-    res.status(201).json({ message: 'Message received.' });
+    res.status(201).json({ message: "Message received." });
   } catch (error) {
-    console.error('Saving contact message failed:', error.message);
-    res.status(500).json({ error: 'Could not save the message. Please try again.' });
+    console.error("Saving contact message failed:", error.message);
+    res
+      .status(500)
+      .json({ error: "Could not save the message. Please try again." });
   }
 });
 
-app.post('/api/admin/login', loginLimiter, async (req, res) => {
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '');
+app.post("/api/admin/login", loginLimiter, async (req, res) => {
+  const email = String(req.body?.email || "")
+    .trim()
+    .toLowerCase();
+  const password = String(req.body?.password || "");
 
   const emailMatches = email === process.env.ADMIN_EMAIL.trim().toLowerCase();
   const passwordMatches = await bcrypt.compare(password, adminPasswordHash);
 
   if (!emailMatches || !passwordMatches) {
-    return res.status(401).json({ error: 'Incorrect email or password.' });
+    return res.status(401).json({ error: "Incorrect email or password." });
   }
 
   const token = jwt.sign(
-    { sub: email, role: 'admin' },
+    { sub: email, role: "admin" },
     process.env.JWT_SECRET,
-    { expiresIn: '8h' },
+    { expiresIn: "8h" },
   );
 
-  res.cookie('adminToken', token, { ...cookieOptions, maxAge: 8 * 60 * 60 * 1000 });
-  res.json({ message: 'Signed in.' });
+  res.cookie("adminToken", token, {
+    ...cookieOptions,
+    maxAge: 8 * 60 * 60 * 1000,
+  });
+  res.json({ message: "Signed in." });
 });
 
-app.get('/api/admin/me', requireAdmin, (_req, res) => {
+app.get("/api/admin/me", requireAdmin, (_req, res) => {
   res.json({ email: process.env.ADMIN_EMAIL });
 });
 
-app.post('/api/admin/logout', requireAdmin, (_req, res) => {
-  res.clearCookie('adminToken', cookieOptions);
-  res.json({ message: 'Signed out.' });
+app.post("/api/admin/logout", requireAdmin, (_req, res) => {
+  res.clearCookie("adminToken", cookieOptions);
+  res.json({ message: "Signed out." });
 });
 
-app.get('/api/admin/overview', requireAdmin, async (_req, res) => {
-  const [messages, unread, projects, published, certificates, publishedCertificates] = await Promise.all([
+app.get("/api/admin/overview", requireAdmin, async (_req, res) => {
+  const [
+    messages,
+    unread,
+    projects,
+    published,
+    certificates,
+    publishedCertificates,
+  ] = await Promise.all([
     Message.countDocuments({ archived: false }),
     Message.countDocuments({ archived: false, read: false }),
     Project.countDocuments(),
-    Project.countDocuments({ status: 'published' }),
+    Project.countDocuments({ status: "published" }),
     Certificate.countDocuments(),
-    Certificate.countDocuments({ status: 'published' }),
+    Certificate.countDocuments({ status: "published" }),
   ]);
 
-  res.json({ messages, unread, projects, published, certificates, publishedCertificates });
+  res.json({
+    messages,
+    unread,
+    projects,
+    published,
+    certificates,
+    publishedCertificates,
+  });
 });
 
-app.get('/api/admin/messages', requireAdmin, async (req, res) => {
-  const filter = req.query.archived === 'true'
-    ? { archived: true }
-    : { archived: false };
+app.get("/api/admin/messages", requireAdmin, async (req, res) => {
+  const filter =
+    req.query.archived === "true" ? { archived: true } : { archived: false };
 
-  if (req.query.unread === 'true') filter.read = false;
+  if (req.query.unread === "true") filter.read = false;
 
   const messages = await Message.find(filter)
     .sort({ createdAt: -1 })
@@ -207,18 +334,19 @@ app.get('/api/admin/messages', requireAdmin, async (req, res) => {
   res.json({ messages });
 });
 
-app.patch('/api/admin/messages/:id', requireAdmin, async (req, res) => {
+app.patch("/api/admin/messages/:id", requireAdmin, async (req, res) => {
   const updates = {};
 
-  if (typeof req.body?.read === 'boolean') updates.read = req.body.read;
-  if (typeof req.body?.archived === 'boolean') updates.archived = req.body.archived;
+  if (typeof req.body?.read === "boolean") updates.read = req.body.read;
+  if (typeof req.body?.archived === "boolean")
+    updates.archived = req.body.archived;
 
   if (!Object.keys(updates).length) {
-    return res.status(400).json({ error: 'No valid changes provided.' });
+    return res.status(400).json({ error: "No valid changes provided." });
   }
 
   if (!mongoose.isValidObjectId(req.params.id)) {
-    return res.status(400).json({ error: 'Invalid message ID.' });
+    return res.status(400).json({ error: "Invalid message ID." });
   }
 
   const message = await Message.findByIdAndUpdate(
@@ -227,27 +355,26 @@ app.patch('/api/admin/messages/:id', requireAdmin, async (req, res) => {
     { new: true, runValidators: true },
   ).lean();
 
-  if (!message) return res.status(404).json({ error: 'Message not found.' });
+  if (!message) return res.status(404).json({ error: "Message not found." });
   res.json({ message });
 });
 
-app.get('/api/admin/projects', requireAdmin, async (_req, res) => {
+app.get("/api/admin/projects", requireAdmin, async (_req, res) => {
   const projects = await Project.find().sort({ updatedAt: -1 }).lean();
   res.json({ projects });
 });
 
-
 function validCertificateUrl(value, optional = false) {
-  if (optional && value === '') return true;
-  if (typeof value !== 'string' || !value.trim()) return false;
+  if (optional && value === "") return true;
+  if (typeof value !== "string" || !value.trim()) return false;
 
   const url = value.trim();
 
   // Permit same-site paths and HTTPS URLs only.
-  if (url.startsWith('/') && !url.startsWith('//')) return true;
+  if (url.startsWith("/") && !url.startsWith("//")) return true;
 
   try {
-    return new URL(url).protocol === 'https:';
+    return new URL(url).protocol === "https:";
   } catch {
     return false;
   }
@@ -255,38 +382,46 @@ function validCertificateUrl(value, optional = false) {
 
 function readCertificate(body = {}) {
   const data = {
-    title: String(body.title || '').trim(),
-    issuer: String(body.issuer || '').trim(),
-    year: String(body.year || '').trim(),
-    imageUrl: String(body.imageUrl || '').trim(),
-    credentialUrl: String(body.credentialUrl || '').trim(),
-    status: body.status === 'published' ? 'published' : 'draft',
+    title: String(body.title || "").trim(),
+    issuer: String(body.issuer || "").trim(),
+    year: String(body.year || "").trim(),
+    imageUrl: String(body.imageUrl || "").trim(),
+    credentialUrl: String(body.credentialUrl || "").trim(),
+    status: body.status === "published" ? "published" : "draft",
     order: Number(body.order ?? 0),
   };
 
   if (!data.title || !data.issuer || !data.year || !data.imageUrl) {
-    return { error: 'Title, issuer, year, and certificate image URL are required.' };
+    return {
+      error: "Title, issuer, year, and certificate image URL are required.",
+    };
   }
 
-  if (data.title.length > 120 || data.issuer.length > 120 ||
-      data.year.length > 40 || data.imageUrl.length > 500 ||
-      data.credentialUrl.length > 500) {
-    return { error: 'One or more fields are too long.' };
+  if (
+    data.title.length > 120 ||
+    data.issuer.length > 120 ||
+    data.year.length > 40 ||
+    data.imageUrl.length > 500 ||
+    data.credentialUrl.length > 500
+  ) {
+    return { error: "One or more fields are too long." };
   }
 
   if (!Number.isInteger(data.order) || data.order < 0) {
-    return { error: 'Display order must be a non-negative whole number.' };
+    return { error: "Display order must be a non-negative whole number." };
   }
 
-  if (!validCertificateUrl(data.imageUrl) ||
-      !validCertificateUrl(data.credentialUrl, true)) {
-    return { error: 'Use a site path or an HTTPS URL for certificate links.' };
+  if (
+    !validCertificateUrl(data.imageUrl) ||
+    !validCertificateUrl(data.credentialUrl, true)
+  ) {
+    return { error: "Use a site path or an HTTPS URL for certificate links." };
   }
 
   return { data };
 }
 
-app.get('/api/admin/certificates', requireAdmin, async (_req, res) => {
+app.get("/api/admin/certificates", requireAdmin, async (_req, res) => {
   const certificates = await Certificate.find()
     .sort({ order: 1, createdAt: -1 })
     .lean();
@@ -294,7 +429,7 @@ app.get('/api/admin/certificates', requireAdmin, async (_req, res) => {
   res.json({ certificates });
 });
 
-app.post('/api/admin/certificates', requireAdmin, async (req, res) => {
+app.post("/api/admin/certificates", requireAdmin, async (req, res) => {
   const result = readCertificate(req.body);
   if (result.error) return res.status(400).json({ error: result.error });
 
@@ -302,9 +437,9 @@ app.post('/api/admin/certificates', requireAdmin, async (req, res) => {
   res.status(201).json({ certificate });
 });
 
-app.put('/api/admin/certificates/:id', requireAdmin, async (req, res) => {
+app.put("/api/admin/certificates/:id", requireAdmin, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
-    return res.status(400).json({ error: 'Invalid certificate ID.' });
+    return res.status(400).json({ error: "Invalid certificate ID." });
   }
 
   const result = readCertificate(req.body);
@@ -317,42 +452,41 @@ app.put('/api/admin/certificates/:id', requireAdmin, async (req, res) => {
   ).lean();
 
   if (!certificate) {
-    return res.status(404).json({ error: 'Certificate not found.' });
+    return res.status(404).json({ error: "Certificate not found." });
   }
 
   res.json({ certificate });
 });
 
-app.delete('/api/admin/certificates/:id', requireAdmin, async (req, res) => {
+app.delete("/api/admin/certificates/:id", requireAdmin, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
-    return res.status(400).json({ error: 'Invalid certificate ID.' });
+    return res.status(400).json({ error: "Invalid certificate ID." });
   }
 
   const certificate = await Certificate.findByIdAndDelete(req.params.id);
   if (!certificate) {
-    return res.status(404).json({ error: 'Certificate not found.' });
+    return res.status(404).json({ error: "Certificate not found." });
   }
 
-  res.json({ message: 'Certificate deleted.' });
+  res.json({ message: "Certificate deleted." });
 });
 
-app.get('/api/portfolio/certificates', async (_req, res) => {
-  const certificates = await Certificate.find({ status: 'published' })
+app.get("/api/portfolio/certificates", async (_req, res) => {
+  const certificates = await Certificate.find({ status: "published" })
     .sort({ order: 1, createdAt: -1 })
     .lean();
 
   res.json({ certificates });
 });
 
-
-app.post('/api/admin/projects', requireAdmin, async (req, res) => {
+app.post("/api/admin/projects", requireAdmin, async (req, res) => {
   const project = await Project.create(req.body);
   res.status(201).json({ project });
 });
 
-app.put('/api/admin/projects/:id', requireAdmin, async (req, res) => {
+app.put("/api/admin/projects/:id", requireAdmin, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
-    return res.status(400).json({ error: 'Invalid project ID.' });
+    return res.status(400).json({ error: "Invalid project ID." });
   }
 
   const project = await Project.findByIdAndUpdate(
@@ -361,43 +495,51 @@ app.put('/api/admin/projects/:id', requireAdmin, async (req, res) => {
     { new: true, runValidators: true },
   );
 
-  if (!project) return res.status(404).json({ error: 'Project not found.' });
+  if (!project) return res.status(404).json({ error: "Project not found." });
   res.json({ project });
 });
 
-app.delete('/api/admin/projects/:id', requireAdmin, async (req, res) => {
+app.delete("/api/admin/projects/:id", requireAdmin, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) {
-    return res.status(400).json({ error: 'Invalid project ID.' });
+    return res.status(400).json({ error: "Invalid project ID." });
   }
 
   const project = await Project.findByIdAndDelete(req.params.id);
-  if (!project) return res.status(404).json({ error: 'Project not found.' });
-  res.json({ message: 'Project deleted.' });
+  if (!project) return res.status(404).json({ error: "Project not found." });
+  res.json({ message: "Project deleted." });
 });
 
 // Public endpoint: only published projects are returned.
-app.get('/api/portfolio/projects', async (_req, res) => {
-  const projects = await Project.find({ status: 'published' })
+app.get("/api/portfolio/projects", async (_req, res) => {
+  const projects = await Project.find({ status: "published" })
     .sort({ featured: -1, updatedAt: -1 })
     .lean();
 
   res.json({ projects });
 });
 
-app.get('/api/admin/content', requireAdmin, async (_req, res) => {
+app.get("/api/admin/content", requireAdmin, async (_req, res) => {
   const content = await PortfolioContent.findOneAndUpdate(
-    { key: 'main' },
-    { $setOnInsert: { key: 'main' } },
+    { key: "main" },
+    { $setOnInsert: { key: "main" } },
     { new: true, upsert: true },
   ).lean();
 
   res.json({ content });
 });
 
-app.put('/api/admin/content', requireAdmin, async (req, res) => {
+app.put("/api/admin/content", requireAdmin, async (req, res) => {
   const allowed = [
-    'heroLine', 'about', 'availability', 'photoUrl', 'resumeUrl',
-    'github', 'linkedin', 'skills', 'education', 'experience',
+    "heroLine",
+    "about",
+    "availability",
+    "photoUrl",
+    "resumeUrl",
+    "github",
+    "linkedin",
+    "skills",
+    "education",
+    "experience",
   ];
 
   const updates = Object.fromEntries(
@@ -405,27 +547,26 @@ app.put('/api/admin/content', requireAdmin, async (req, res) => {
   );
 
   const content = await PortfolioContent.findOneAndUpdate(
-    { key: 'main' },
-    { $set: updates, $setOnInsert: { key: 'main' } },
+    { key: "main" },
+    { $set: updates, $setOnInsert: { key: "main" } },
     { new: true, upsert: true, runValidators: true },
   ).lean();
 
   res.json({ content });
 });
 
-app.get('/api/portfolio/content', async (_req, res) => {
-  const content = await PortfolioContent.findOne({ key: 'main' }).lean();
+app.get("/api/portfolio/content", async (_req, res) => {
+  const content = await PortfolioContent.findOne({ key: "main" }).lean();
   res.json({ content });
 });
 
-
 if (production) {
-  app.use(express.static(path.join(rootDir, 'dist')));
+  app.use(express.static(path.join(rootDir, "dist")));
 }
 
 async function start() {
   await mongoose.connect(process.env.MONGODB_URI);
-  console.log('Connected to MongoDB.');
+  console.log("Connected to MongoDB.");
 
   app.listen(port, () => {
     console.log(`Portfolio server running on port ${port}`);
@@ -433,6 +574,6 @@ async function start() {
 }
 
 start().catch((error) => {
-  console.error('Server startup failed:', error.message);
+  console.error("Server startup failed:", error.message);
   process.exit(1);
 });
